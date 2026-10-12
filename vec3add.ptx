@@ -1,0 +1,89 @@
+
+.version 9.4
+.target sm_75
+.address_size 64
+
+.visible .entry vec3add(
+	.param .u64 a,
+	.param .u64 b,
+	.param .u64 c,
+	.param .u32 nx,
+	.param .u32 ny,
+	.param .u32 nz
+)
+{
+
+	.reg .pred %p<4>;
+	.reg .f32 %f<3>;
+	.reg .b64 %rd<6>;
+	.reg .b32 %r<12>;
+	.reg .b32 %sp<9>;
+
+	ld.param.u64 %rd1, [a];
+	ld.param.u64 %rd2, [b];
+	ld.param.u64 %rd3, [c];
+	ld.param.u32 %r1, [nx];
+	ld.param.u32 %r2, [ny];
+	ld.param.u32 %r3, [nz];
+
+	mov.u32 %sp0, %ctaid.x;
+	mov.u32 %sp1, %ctaid.y;
+	mov.u32 %sp2, %ctaid.z;
+
+	mov.u32 %sp3, %ntid.x;
+	mov.u32 %sp4, %ntid.y;
+	mov.u32 %sp5, %ntid.z;
+	
+	mov.u32 %sp6, %tid.x;
+	mov.u32 %sp7, %tid.y;
+	mov.u32 %sp8, %tid.z;
+
+	cvta.to.global.u64 %rd1, %rd1;
+	cvta.to.global.u64 %rd2, %rd2;
+	cvta.to.global.u64 %rd3, %rd3;
+
+	mad.lo.s32 %r4, %sp0, %sp3, %sp6;
+	mad.lo.s32 %r5, %sp1, %sp4, %sp7;
+	mad.lo.s32 %r6, %sp2, %sp5, %sp8;
+
+	setp.ge.s32 %p0, %r4, %r1;
+	setp.ge.s32 %p1, %r5, %r2;
+	setp.ge.s32 %p2, %r6, %r3;
+	@%p0 bra $exit;
+	@%p1 bra $exit;
+	@%p2 bra $exit;
+	
+	mul.lo.s32 %r8, %r1, %r5; // y * nx
+
+	mul.lo.s32 %r9, %r6, %r1; // k * nx * ny
+	mul.lo.s32 %r9, %r9, %r2;
+	
+	add.s32 %r10, %r4, %r8;
+	add.s32 %r10, %r10, %r9; // r10 = idx
+	
+	mul.lo.s32 %r11, %r1, %r2;
+	mul.lo.s32 %r11, %r11, %r3; 
+
+	setp.ge.s32 %p3, %r10, %r11;
+	@%p3 bra $exit;
+
+	// meat and potatoes
+
+	mul.wide.s32 %rd5, %r10, 4; // size of float byte offset
+	add.s64 %rd1, %rd5, %rd1;
+	add.s64 %rd2, %rd5, %rd2;
+	add.s64 %rd3, %rd5, %rd3;
+	
+	ld.global.f32 %f0, [%rd1]; // a[i]
+	ld.global.f32 %f1, [%rd2]; //b[i]
+
+	add.f32 %f2, %f0, %f1;
+	
+	st.global.f32 [%rd3], %f2;
+
+$exit:
+	ret;
+}
+ 
+
+

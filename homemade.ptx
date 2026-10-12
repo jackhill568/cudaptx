@@ -1,0 +1,51 @@
+
+.version 9.4
+.target sm_75
+.address_size 64
+
+.visible .entry vecmult(	
+	.param .u64 a,
+	.param .u64 b,
+	.param .u64 c,
+	.param .u32 size
+) {
+
+	.reg .pred %p;
+	.reg .f32 %f<4>;
+	.reg .b32 %r<6>;
+	.reg .b64 %rd<11>;
+
+	ld.param.u64 %rd1, [a];	
+	ld.param.u64 %rd2, [b];	
+	ld.param.u64 %rd3, [c];	
+	ld.param.u32 %r1, [size];
+
+	// next calc index
+	// thread.idx + bloackIdx.x * bloackDim.x
+	mad.lo.s32 %r2, %ctaid.x, %ntid.x, %tid.x;
+
+	setp.ge.s32 %p, %r2, %r1;
+	@%p bra $exit;
+
+	// c[i] = a[i] * b[i]
+	cvta.to.global.u64 %rd1, %rd1;
+	cvta.to.global.u64 %rd2, %rd2;
+	cvta.to.global.u64 %rd3, %rd3;
+	// calc bit offset idx * 4(size of float)
+	mul.wide.s32 %rd4, %r2, 4;
+	//get positions
+	add.s64 %rd5, %rd4, %rd1;
+	add.s64 %rd6, %rd4, %rd2;
+	add.s64 %rd7, %rd4, %rd3;
+
+	ld.global.f32 %f1, [%rd5];
+	ld.global.f32 %f2, [%rd6];
+
+	mul.f32 %f3, %f1, %f2;
+
+	st.global.f32 [%rd7], %f3;
+
+$exit:
+	ret;
+}
+
